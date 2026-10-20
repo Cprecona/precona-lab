@@ -1,0 +1,19 @@
+[project]
+name = "precona-backend"
+version = "0.1.0"
+requires-python = ">=3.12"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "C90", "S"]
+ignore = ["S101"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+addopts = "-q --cov=precona --cov-branch --cov-report=term-missing --cov-fail-under=80"
