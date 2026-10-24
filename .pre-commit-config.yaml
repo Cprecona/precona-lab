@@ -1,0 +1,50 @@
+# Pre-commit hook del proyecto precona.com.ar
+# Cadena obligatoria y secuencial: 1) Formatter  2) Linter  3) Pruebas unitarias.
+# fail_fast: ante el primer control que falla, se detiene la cadena y se aborta el commit.
+fail_fast: true
+
+repos:
+  - repo: local
+    hooks:
+      # ---------- 1. FORMATTER ----------
+      - id: formatter-python
+        name: "1/3 Formatter · Ruff format (backend)"
+        entry: ruff format
+        language: system
+        files: ^backend/.*\.py$
+
+      - id: formatter-typescript
+        name: "1/3 Formatter · Prettier (sitio)"
+        entry: sitio/node_modules/.bin/prettier --write
+        language: system
+        files: ^sitio/.*\.ts$
+
+      # ---------- 2. LINTER ----------
+      - id: linter-python
+        name: "2/3 Linter · Ruff check (backend)"
+        entry: bash -c 'cd backend && ruff check . && python3 -m mypy --strict precona tests'
+        language: system
+        files: ^backend/
+        pass_filenames: false
+
+      - id: linter-typescript
+        name: "2/3 Linter · ESLint + tsc (sitio)"
+        entry: bash -c 'cd sitio && npx eslint src tests && npx tsc --noEmit'
+        language: system
+        files: ^sitio/
+        pass_filenames: false
+
+      # ---------- 3. PRUEBAS UNITARIAS ----------
+      - id: tests-python
+        name: "3/3 Pruebas · pytest + cobertura >= 80 % (backend)"
+        entry: bash -c 'cd backend && python3 -m pytest'
+        language: system
+        files: ^backend/
+        pass_filenames: false
+
+      - id: tests-typescript
+        name: "3/3 Pruebas · Vitest + cobertura >= 80 % (sitio)"
+        entry: bash -c 'cd sitio && npx vitest run --coverage'
+        language: system
+        files: ^sitio/
+        pass_filenames: false
