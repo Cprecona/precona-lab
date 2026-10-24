@@ -16,4 +16,4 @@ max-complexity = 10
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
-addopts = "-q --cov=precona --cov-branch --cov-report=term-missing --cov-fail-under=80"
+addopts = "-q --tb=short --cov=precona --cov-branch --cov-report=term-missing --cov-fail-under=80"
