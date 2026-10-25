@@ -8,5 +8,5 @@ export function validarCuit(cuit: string): boolean {
   return dv !== 10 && dv === Number(n[10]);
 }
 export function mailValido(mail: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail);
+  return /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/.test(mail);
 }
