@@ -1,61 +1,58 @@
-# Versión inicial del procesamiento de pagos (antes de la refactorización)
-import json
-import requests
+"""Procesamiento de avisos de pago de la pasarela (RF-09, RF-10, RN-03)."""
 
-TOKEN_MP = "TEST-0000000000000000-000000-00000000000000000000000000000000-000000000"
-procesados = []
+from dataclasses import dataclass
+from typing import Protocol
+
+from precona.cuit import validar_cuit
 
 
-def procesar_aviso_mp(datos, enviar_mail, guardar_licencia, emitir_factura):
-    global procesados
-    id_pago = datos["data"]["id"]
-    if id_pago in procesados:
-        return "duplicado"
-    try:
-        r = requests.get("https://api.mercadopago.com/v1/payments/" + str(id_pago),
-                         headers={"Authorization": "Bearer " + TOKEN_MP}, verify=False)
-        pago = json.loads(r.text)
-    except:
-        return "error"
-    cuit = pago["metadata"]["cuit"].replace("-", "")
-    if len(cuit) == 11 and cuit.isdigit():
-        pesos = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2]
-        suma = 0
-        for i in range(10):
-            suma = suma + int(cuit[i]) * pesos[i]
-        dv = 11 - (suma % 11)
-        if dv == 11:
-            dv = 0
-        if dv == 10 or dv != int(cuit[10]):
-            return "cuit_invalido"
-    else:
-        return "cuit_invalido"
-    if pago["status"] == "approved":
-        if pago["transaction_amount"] == pago["metadata"]["importe_orden"]:
-            if pago["metadata"]["modalidad"] == "unico":
-                guardar_licencia(id_pago, cuit)
-                if pago["metadata"]["condicion_iva"] == "RI":
-                    emitir_factura(id_pago, "A")
-                    enviar_mail(pago["payer"]["email"], "Tu licencia", "Gracias por tu compra. Adjuntamos licencia y factura.")
-                else:
-                    emitir_factura(id_pago, "B")
-                    enviar_mail(pago["payer"]["email"], "Tu licencia", "Gracias por tu compra. Adjuntamos licencia y factura.")
-            elif pago["metadata"]["modalidad"] == "semestral":
-                guardar_licencia(id_pago, cuit)
-                if pago["metadata"]["condicion_iva"] == "RI":
-                    emitir_factura(id_pago, "A")
-                    enviar_mail(pago["payer"]["email"], "Tu licencia", "Gracias por tu suscripción. Adjuntamos licencia y factura.")
-                else:
-                    emitir_factura(id_pago, "B")
-                    enviar_mail(pago["payer"]["email"], "Tu licencia", "Gracias por tu suscripción. Adjuntamos licencia y factura.")
-            else:
-                return "modalidad_desconocida"
-            procesados.append(id_pago)
-            return "entregado"
-        else:
-            return "importe_distinto"
-    elif pago["status"] == "rejected":
-        enviar_mail(pago["payer"]["email"], "Pago rechazado", "Tu pago fue rechazado.")
-        return "rechazado"
-    else:
+@dataclass(frozen=True)
+class Orden:
+    id_orden: str
+    cuit: str
+    importe: float
+
+
+@dataclass(frozen=True)
+class EstadoPago:
+    estado: str
+    importe: float
+
+
+class Pasarela(Protocol):
+    """Adaptador hacia la pasarela de pagos (en producción, Mercado Pago)."""
+
+    def consultar_pago(self, id_pago: str) -> EstadoPago: ...
+
+
+class Registro(Protocol):
+    """Acceso a la base: pagos procesados y licencias."""
+
+    def pago_ya_procesado(self, id_pago: str) -> bool: ...
+
+    def registrar_licencia(self, id_pago: str, orden: Orden) -> None: ...
+
+
+def decidir_accion(orden: Orden, pago: EstadoPago) -> str:
+    """Devuelve la acción que corresponde al estado informado por la pasarela."""
+    if pago.estado == "rejected":
+        return "notificar_rechazo"
+    if pago.estado != "approved":
         return "esperar"
+    if pago.importe != orden.importe or not validar_cuit(orden.cuit):
+        return "revisar_manual"
+    return "entregar_licencia"
+
+
+def procesar_aviso(id_pago: str, orden: Orden, pasarela: Pasarela, registro: Registro) -> str:
+    """Procesa un aviso de pago una sola vez y entrega la licencia si corresponde.
+
+    El estado se consulta siempre a la pasarela: el contenido del aviso no se
+    considera confiable (RF-09). Un aviso repetido no genera nada nuevo (RF-10).
+    """
+    if registro.pago_ya_procesado(id_pago):
+        return "duplicado"
+    accion = decidir_accion(orden, pasarela.consultar_pago(id_pago))
+    if accion == "entregar_licencia":
+        registro.registrar_licencia(id_pago, orden)
+    return accion

@@ -5,7 +5,7 @@ export default defineConfig({
     coverage: {
       provider: "istanbul",
       include: ["src/**/*.ts"],
-      reporter: ["text", "html"],
+      reporter: [["text", { skipFull: false }], "html"],
       thresholds: { lines: 80, branches: 80, functions: 80, statements: 80 },
     },
   },
